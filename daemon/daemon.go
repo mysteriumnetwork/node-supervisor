@@ -81,6 +81,12 @@ func (d Daemon) serve(c net.Conn) {
 				}
 			}()
 		case "KILL":
+			if err := d.KillMyst(); err != nil {
+				log.Println("Could not kill myst:", err)
+				message(c, "FAIL")
+			} else {
+				message(c, "DONE")
+			}
 		}
 	}
 }
