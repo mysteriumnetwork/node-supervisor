@@ -81,7 +81,10 @@ func (d Daemon) serve(c net.Conn) {
 			go func() {
 				err := d.RunMyst()
 				if err != nil {
-					log.Println("Error running myst:", err)
+					log.Println("Could not run myst:", err)
+					message(c, "FAIL")
+				} else {
+					message(c, "DONE")
 				}
 			}()
 		case "KILL":

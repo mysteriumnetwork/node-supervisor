@@ -5,6 +5,7 @@
 package daemon
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 )
 
 const pidFile = "/var/run/myst.pid"
@@ -27,6 +29,7 @@ func (d *Daemon) RunMyst() error {
 		"/sbin",
 		"/usr/local/bin",
 	}
+	var stdout, stderr bytes.Buffer
 	cmd := exec.Cmd{
 		Path: d.cfg.MystPath,
 		Args: []string{
@@ -40,18 +43,38 @@ func (d *Daemon) RunMyst() error {
 			"HOME=" + d.cfg.MystHome,
 			"PATH=" + strings.Join(paths, ":"),
 		},
+		Stdout: &stdout,
+		Stderr: &stderr,
 	}
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+
+	err := runWithSuccessTimeout(cmd.Wait, 5*time.Second)
+	if err != nil {
+		log.Printf("myst output [err=%s]:\n%s\n%s\n", err, stderr.String(), stdout.String())
+		return err
+	}
+
 	pid := cmd.Process.Pid
 	if err := ioutil.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0700); err != nil {
 		return err
 	}
 
-	out, err := cmd.CombinedOutput()
-	log.Printf("myst [err=%s] output: %s\n", err, out)
-	return err
+	return nil
+}
+
+func runWithSuccessTimeout(f func() error, timeout time.Duration) error {
+	done := make(chan error)
+	go func() {
+		done <- f()
+	}()
+	select {
+	case <-time.After(timeout):
+		return nil
+	case err := <-done:
+		return err
+	}
 }
 
 func (d *Daemon) KillMyst() error {
