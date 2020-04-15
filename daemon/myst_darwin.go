@@ -29,7 +29,13 @@ func (d *Daemon) RunMyst() error {
 	}
 	cmd := exec.Cmd{
 		Path: d.cfg.MystPath,
-		Args: []string{d.cfg.MystPath, "--openvpn.binary", d.cfg.OpenVPNPath, "daemon"},
+		Args: []string{
+			d.cfg.MystPath,
+			"--openvpn.binary", d.cfg.OpenVPNPath,
+			"--mymysterium.enabled=false",
+			"--ui.enable=false",
+			"daemon",
+		},
 		Env: []string{
 			"HOME=" + d.cfg.MystHome,
 			"PATH=" + strings.Join(paths, ":"),
