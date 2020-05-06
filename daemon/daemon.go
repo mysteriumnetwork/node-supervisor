@@ -71,13 +71,13 @@ func (d Daemon) serve(c net.Conn) {
 		cmd := strings.Split(string(line), " ")
 		op := cmd[0]
 		switch op {
-		case "BYE":
+		case CommandBye:
 			message(c, "BYE")
 			return
-		case "PING":
+		case CommandPing:
 			message(c, "PONG")
 			return
-		case "RUN":
+		case CommandRun:
 			go func() {
 				err := d.RunMyst()
 				if err != nil {
@@ -87,7 +87,7 @@ func (d Daemon) serve(c net.Conn) {
 					message(c, "DONE")
 				}
 			}()
-		case "KILL":
+		case CommandKill:
 			if err := d.KillMyst(); err != nil {
 				log.Println("Could not kill myst:", err)
 				message(c, "FAIL")
