@@ -119,14 +119,20 @@ func (d Daemon) serve(c net.Conn) {
 
 func (d Daemon) wgUp(args ...string) (interfaceName string, err error) {
 	flags := flag.NewFlagSet("", flag.ContinueOnError)
-	requestedInterfaceName := flags.String("iface", "", "")
+	requestedInterfaceName := flags.String("iface", "", "Requested tunnel interface name")
+	uid := flags.String("uid", "", "User ID."+
+		" On POSIX systems, this is a decimal number representing the uid."+
+		" On Windows, this is a security identifier (SID) in a string format.")
 	if err := flags.Parse(args[1:]); err != nil {
 		return "", err
 	}
 	if *requestedInterfaceName == "" {
 		return "", errors.New("-iface is required")
 	}
-	return d.monitor.Up(*requestedInterfaceName)
+	if *uid == "" {
+		return "", errors.New("-uid is required")
+	}
+	return d.monitor.Up(*requestedInterfaceName, *uid)
 }
 
 func (d Daemon) wgDown(args ...string) (err error) {

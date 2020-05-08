@@ -1,3 +1,7 @@
+// Copyright (c) 2020 BlockDev AG
+// This source code is licensed under the MIT license found in the
+// LICENSE file in the root directory of this source tree.
+
 package wireguard
 
 import (
@@ -18,14 +22,14 @@ func NewMonitor() *Monitor {
 	}
 }
 
-func (m *Monitor) Up(requestedInterfaceName string) (string, error) {
+func (m *Monitor) Up(requestedInterfaceName string, uid string) (string, error) {
 	m.Lock()
 	defer m.Unlock()
 
 	if _, exists := m.interfaces[requestedInterfaceName]; exists {
 		return "", fmt.Errorf("interface %s already exists", requestedInterfaceName)
 	}
-	iface, err := wginterface.New(requestedInterfaceName)
+	iface, err := wginterface.New(requestedInterfaceName, uid)
 	if err != nil {
 		return "", err
 	}
