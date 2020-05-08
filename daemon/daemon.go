@@ -6,26 +6,29 @@ package daemon
 
 import (
 	"bufio"
+	"errors"
+	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
 	"strings"
 
 	"github.com/mysteriumnetwork/node-supervisor/config"
+	"github.com/mysteriumnetwork/node-supervisor/daemon/wireguard"
 )
 
 const sock = "/var/run/myst.sock"
 
 // Daemon - supervisor process.
 type Daemon struct {
-	cfg *config.Config
+	cfg     *config.Config
+	monitor *wireguard.Monitor
 }
 
 // New creates a new daemon.
 func New(cfg *config.Config) Daemon {
-	return Daemon{cfg: cfg}
+	return Daemon{cfg: cfg, monitor: wireguard.NewMonitor()}
 }
 
 // Start supervisor daemon. Blocks.
@@ -66,40 +69,74 @@ func (d Daemon) Start() error {
 // serve talks to the client via established connection.
 func (d Daemon) serve(c net.Conn) {
 	scan := bufio.NewScanner(c)
+	answer := responder{c}
 	for scan.Scan() {
 		line := scan.Bytes()
 		cmd := strings.Split(string(line), " ")
 		op := cmd[0]
 		switch op {
 		case CommandBye:
-			message(c, "BYE")
+			answer.ok("bye")
 			return
 		case CommandPing:
-			message(c, "PONG")
-			return
+			answer.ok("pong")
 		case CommandRun:
 			go func() {
 				err := d.RunMyst()
 				if err != nil {
-					log.Println("Could not run myst:", err)
-					message(c, "FAIL")
+					log.Printf("failed %s: %s", CommandRun, err)
+					answer.err(err)
 				} else {
-					message(c, "DONE")
+					answer.ok()
 				}
 			}()
+		case CommandWgUp:
+			up, err := d.wgUp(cmd...)
+			if err != nil {
+				log.Printf("failed %s: %s", CommandWgUp, err)
+				answer.err(err)
+			} else {
+				answer.ok(up)
+			}
+		case CommandWgDown:
+			err := d.wgDown(cmd...)
+			if err != nil {
+				log.Printf("failed %s: %s", CommandWgDown, err)
+				answer.err(err)
+			} else {
+				answer.ok()
+			}
 		case CommandKill:
 			if err := d.KillMyst(); err != nil {
 				log.Println("Could not kill myst:", err)
-				message(c, "FAIL")
+				answer.err(err)
 			} else {
-				message(c, "DONE")
+				answer.ok()
 			}
 		}
 	}
 }
 
-func message(w io.Writer, msg string) {
-	if _, err := fmt.Fprintln(w, msg); err != nil {
-		log.Println("Could not send message:", msg)
+func (d Daemon) wgUp(args ...string) (interfaceName string, err error) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	requestedInterfaceName := flags.String("iface", "", "")
+	if err := flags.Parse(args[1:]); err != nil {
+		return "", err
 	}
+	if *requestedInterfaceName == "" {
+		return "", errors.New("-iface is required")
+	}
+	return d.monitor.Up(*requestedInterfaceName)
+}
+
+func (d Daemon) wgDown(args ...string) (err error) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	interfaceName := flags.String("iface", "", "")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *interfaceName == "" {
+		return errors.New("-iface is required")
+	}
+	return d.monitor.Down(*interfaceName)
 }
