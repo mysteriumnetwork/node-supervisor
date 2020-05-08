@@ -11,6 +11,7 @@ import (
 	"github.com/mysteriumnetwork/node-supervisor/daemon/wireguard/wginterface"
 )
 
+// Monitor creates/deletes the wireguard interfaces and keeps track of them.
 type Monitor struct {
 	interfaces map[string]*wginterface.WgInterface
 	sync.Mutex
