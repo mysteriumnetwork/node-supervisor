@@ -8,10 +8,14 @@ import (
 	"bufio"
 	"errors"
 	"flag"
+	"fmt"
 	"io"
 	"log"
+	"net"
+	"os/exec"
 	"strings"
 
+	"github.com/jackpal/gateway"
 	"github.com/mysteriumnetwork/node-supervisor/config"
 	"github.com/mysteriumnetwork/node-supervisor/daemon/transport"
 	"github.com/mysteriumnetwork/node-supervisor/daemon/wireguard"
@@ -73,6 +77,30 @@ func (d Daemon) dialog(conn io.ReadWriter) {
 			} else {
 				answer.ok()
 			}
+		case CommandAssignIP:
+			err := d.assignIP(cmd...)
+			if err != nil {
+				log.Printf("failed %s: %s", CommandAssignIP, err)
+				answer.err(err)
+			} else {
+				answer.ok()
+			}
+		case CommandExcludeRoute:
+			err := d.excludeRoute(cmd...)
+			if err != nil {
+				log.Printf("failed %s: %s", CommandExcludeRoute, err)
+				answer.err(err)
+			} else {
+				answer.ok()
+			}
+		case CommandDefaultRoute:
+			err := d.defaultRoute(cmd...)
+			if err != nil {
+				log.Printf("failed %s: %s", CommandDefaultRoute, err)
+				answer.err(err)
+			} else {
+				answer.ok()
+			}
 		case CommandKill:
 			if err := d.KillMyst(); err != nil {
 				log.Println("Could not kill myst:", err)
@@ -112,4 +140,86 @@ func (d Daemon) wgDown(args ...string) (err error) {
 		return errors.New("-iface is required")
 	}
 	return d.monitor.Down(*interfaceName)
+}
+
+func (d Daemon) assignIP(args ...string) (err error) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	interfaceName := flags.String("iface", "", "")
+	network := flags.String("net", "", "")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *interfaceName == "" {
+		return errors.New("-iface is required")
+	}
+	if *network == "" {
+		return errors.New("-net is required")
+	}
+	_, ipNet, err := net.ParseCIDR(*network)
+	if err != nil {
+		return fmt.Errorf("-net could not be parsed: %w", err)
+	}
+	output, err := exec.Command("sudo", "ifconfig", *interfaceName, *network, peerIP(*ipNet).String()).CombinedOutput()
+	if err != nil {
+		log.Println(output)
+		return fmt.Errorf("ifconfig returned error: %w", err)
+	}
+	return nil
+}
+
+func (d Daemon) excludeRoute(args ...string) (err error) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	ip := flags.String("ip", "", "")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *ip == "" {
+		return errors.New("-ip is required")
+	}
+	parsedIP := net.ParseIP(*ip)
+	if parsedIP == nil {
+		return fmt.Errorf("-ip could not be parsed: %w", err)
+	}
+	gw, err := gateway.DiscoverGateway()
+	if err != nil {
+		return err
+	}
+	output, err := exec.Command("route", "add", "-host", parsedIP.String(), gw.String()).CombinedOutput()
+	if err != nil {
+		log.Println(output)
+		return fmt.Errorf("route add returned error: %w", err)
+	}
+	return nil
+}
+
+func (d Daemon) defaultRoute(args ...string) (err error) {
+	flags := flag.NewFlagSet("", flag.ContinueOnError)
+	interfaceName := flags.String("iface", "", "")
+	if err := flags.Parse(args[1:]); err != nil {
+		return err
+	}
+	if *interfaceName == "" {
+		return errors.New("-iface is required")
+	}
+	output, err := exec.Command("route", "add", "-net", "0.0.0.0/1", "-interface", *interfaceName).CombinedOutput()
+	if err != nil {
+		log.Println(output)
+		return fmt.Errorf("route add returned error: %w", err)
+	}
+	output, err = exec.Command("route", "add", "-net", "128.0.0.0/1", "-interface", *interfaceName).CombinedOutput()
+	if err != nil {
+		log.Println(output)
+		return fmt.Errorf("route add returned error: %w", err)
+	}
+	return nil
+}
+
+func peerIP(subnet net.IPNet) net.IP {
+	lastOctetID := len(subnet.IP) - 1
+	if subnet.IP[lastOctetID] == byte(1) {
+		subnet.IP[lastOctetID] = byte(2)
+	} else {
+		subnet.IP[lastOctetID] = byte(1)
+	}
+	return subnet.IP
 }

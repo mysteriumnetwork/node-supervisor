@@ -26,7 +26,7 @@ func New(requestedInterfaceName string, uid string) (*WgInterface, error) {
 		return nil, fmt.Errorf("failed to create TUN device %s: %w", requestedInterfaceName, err)
 	}
 
-	logger := device.NewLogger(device.LogLevelInfo, fmt.Sprintf("(%s) ", interfaceName))
+	logger := device.NewLogger(device.LogLevelDebug, fmt.Sprintf("(%s) ", interfaceName))
 	logger.Info.Println("Starting wireguard-go version", device.WireGuardGoVersion)
 
 	wgDevice := device.NewDevice(tunnel, logger)

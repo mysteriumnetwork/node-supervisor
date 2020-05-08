@@ -5,10 +5,13 @@
 package daemon
 
 const (
-	CommandPing   = "ping"
-	CommandRun    = "run"
-	CommandKill   = "kill"
-	CommandBye    = "bye"
-	CommandWgUp   = "wg-up"
-	CommandWgDown = "wg-down"
+	CommandPing         = "ping"
+	CommandRun          = "run"
+	CommandKill         = "kill"
+	CommandBye          = "bye"
+	CommandWgUp         = "wg-up"
+	CommandWgDown       = "wg-down"
+	CommandAssignIP     = "assign-ip"
+	CommandExcludeRoute = "exclude-route"
+	CommandDefaultRoute = "default-route"
 )
